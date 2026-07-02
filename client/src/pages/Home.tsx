@@ -3,6 +3,32 @@ import { Search, Sparkles, FileText, FileType2, ExternalLink, ChevronRight } fro
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TOP_K_OPTIONS = [5, 10, 20, 50, 100] as const;
+type TopKOption = (typeof TOP_K_OPTIONS)[number];
+const DEFAULT_TOP_K: TopKOption = 10;
+const LS_KEY = "semanticSearch_topK";
+
+function loadTopK(): TopKOption {
+  try {
+    const stored = localStorage.getItem(LS_KEY);
+    const n = stored ? parseInt(stored, 10) : NaN;
+    return (TOP_K_OPTIONS as readonly number[]).includes(n) ? (n as TopKOption) : DEFAULT_TOP_K;
+  } catch {
+    return DEFAULT_TOP_K;
+  }
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 type SearchResult = {
   id: number;
@@ -138,9 +164,12 @@ function NoDocumentsState() {
   );
 }
 
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [topK, setTopK] = useState<TopKOption>(loadTopK);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: allDocs } = trpc.documents.list.useQuery();
@@ -151,7 +180,7 @@ export default function Home() {
     isFetching,
     isError,
   } = trpc.documents.search.useQuery(
-    { query: submittedQuery },
+    { query: submittedQuery, topK },
     { enabled: submittedQuery.length > 0 }
   );
 
@@ -159,6 +188,14 @@ export default function Home() {
     e.preventDefault();
     const trimmed = query.trim();
     if (trimmed) setSubmittedQuery(trimmed);
+  };
+
+  const handleTopKChange = (val: string) => {
+    const n = parseInt(val, 10) as TopKOption;
+    setTopK(n);
+    try { localStorage.setItem(LS_KEY, String(n)); } catch { /* ignore */ }
+    // Re-run the current query with the new limit if one is active
+    if (submittedQuery) setSubmittedQuery(submittedQuery);
   };
 
   // Focus input on mount
@@ -234,11 +271,30 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {/* Controls row: result count selector */}
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <label className="text-xs text-muted-foreground/70 font-medium">
+                Show
+              </label>
+              <Select value={String(topK)} onValueChange={handleTopKChange}>
+                <SelectTrigger className="h-7 w-20 text-xs rounded-lg border-border/60 bg-card shadow-none focus:ring-0 focus:ring-offset-0 px-2.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end" className="min-w-[5rem]">
+                  {TOP_K_OPTIONS.map(n => (
+                    <SelectItem key={n} value={String(n)} className="text-xs">
+                      {n} results
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </form>
 
           {/* Hint */}
           {!showResults && (
-            <p className="animate-fade-up stagger-4 text-center text-xs text-muted-foreground/60 mt-4">
+            <p className="animate-fade-up stagger-4 text-center text-xs text-muted-foreground/60 mt-2">
               Try: "quarterly revenue report" · "project timeline" · "legal contract terms"
             </p>
           )}
@@ -267,7 +323,7 @@ export default function Home() {
         {/* Skeleton */}
         {showSkeleton && (
           <div className="space-y-4">
-            {[1, 2, 3].map(i => (
+            {Array.from({ length: Math.min(topK, 5) }).map((_, i) => (
               <div key={i} className="bg-card rounded-xl border border-border/60 p-6 shadow-soft">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-5 h-5 rounded animate-shimmer" />

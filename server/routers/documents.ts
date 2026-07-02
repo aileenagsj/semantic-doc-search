@@ -53,9 +53,12 @@ export const deleteDocumentProcedure = publicProcedure
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 export const searchDocuments = publicProcedure
-  .input(z.object({ query: z.string().min(1).max(500) }))
+  .input(z.object({
+    query: z.string().min(1).max(500),
+    topK: z.number().int().min(1).max(100).default(10),
+  }))
   .query(async ({ input }) => {
-    const { query } = input;
+    const { query, topK } = input;
 
     // Embed the query
     const queryEmbedding = await generateEmbedding(query);
@@ -85,9 +88,9 @@ export const searchDocuments = publicProcedure
         };
       });
 
-    // Sort descending by score, return top 20
+    // Sort descending by score, return topK results
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 20);
+    return scored.slice(0, topK);
   });
 
 // ─── Process (background-style: extract + embed after upload) ─────────────────

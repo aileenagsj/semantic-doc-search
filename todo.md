@@ -52,3 +52,9 @@
 - [x] Add RefreshCw button to each row on the Manage page; show spinner while processing; poll until ready
 - [x] Vitest: reindex procedure input validation
 - [x] Checkpoint
+
+## Result Count Selector
+- [x] Update search procedure to accept a topK parameter (default 10, max 100)
+- [x] Add result count selector to the search UI (options: 5, 10, 20, 50, 100)
+- [x] Persist the user's preference in localStorage
+- [x] Checkpoint
