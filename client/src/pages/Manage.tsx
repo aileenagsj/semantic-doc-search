@@ -15,6 +15,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+import PinGate from "@/components/PinGate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -194,7 +195,7 @@ type DeleteTarget =
   | { kind: "single"; id: number; name: string }
   | { kind: "bulk"; ids: number[] };
 
-export default function ManagePage() {
+function ManageContent() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [reindexingIds, setReindexingIds] = useState<Set<number>>(new Set());
@@ -517,5 +518,13 @@ export default function ManagePage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+export default function Manage() {
+  return (
+    <PinGate title="Document Management">
+      <ManageContent />
+    </PinGate>
   );
 }

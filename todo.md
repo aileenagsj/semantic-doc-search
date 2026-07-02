@@ -85,3 +85,13 @@
 - [x] Write systemd service file for the sidecar
 - [x] Update embed_service/README.md with remote deployment notes
 - [x] Checkpoint
+
+## Admin PIN Gate
+- [x] Add ADMIN_PIN secret via webdev_request_secrets
+- [x] Create PinContext provider for client-side auth state (localStorage persistence)
+- [x] Create PinGate component: modal with PIN input, unlock logic
+- [x] Wrap Upload page with PinGate
+- [x] Wrap Documents page with PinGate
+- [x] Add "Unlock" button in nav or page header to re-prompt for PIN
+- [x] Write tests for PIN validation
+- [x] Checkpoint

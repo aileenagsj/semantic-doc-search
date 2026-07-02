@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import PinGate from "@/components/PinGate";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -250,7 +251,7 @@ function ZipFileRow({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function UploadPage() {
+function UploadContent() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -561,5 +562,13 @@ export default function UploadPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Upload() {
+  return (
+    <PinGate title="Upload Documents">
+      <UploadContent />
+    </PinGate>
   );
 }
