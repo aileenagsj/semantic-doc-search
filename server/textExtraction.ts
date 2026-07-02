@@ -1,10 +1,12 @@
 import mammoth from "mammoth";
-import * as pdfParseModule from "pdf-parse";
-// pdf-parse exports differently depending on module resolution
-const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number }> =
-  (pdfParseModule as unknown as { default?: unknown }).default
-    ? (pdfParseModule as unknown as { default: (b: Buffer) => Promise<{ text: string; numpages: number }> }).default
-    : (pdfParseModule as unknown as (b: Buffer) => Promise<{ text: string; numpages: number }>);
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+// pdf-parse v2 exports a class-based API; use PDFParse with data in constructor options
+const { PDFParse } = require("pdf-parse") as {
+  PDFParse: new (opts: { verbosity: number; data: Buffer }) => {
+    getText(opts?: object): Promise<{ text: string; total: number; pages: unknown[] }>;
+  };
+};
 
 export type ExtractionResult = {
   text: string;
@@ -15,10 +17,11 @@ export type ExtractionResult = {
  * Extract plain text from a PDF buffer.
  */
 export async function extractPdfText(buffer: Buffer): Promise<ExtractionResult> {
-  const data = await pdfParse(buffer);
+  const parser = new PDFParse({ verbosity: 0, data: buffer });
+  const data = await parser.getText({});
   return {
     text: data.text.trim(),
-    pageCount: data.numpages,
+    pageCount: data.total,
   };
 }
 
