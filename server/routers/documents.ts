@@ -25,6 +25,7 @@ import {
 } from "../embedding";
 import { extractText, findRelevantSnippet } from "../textExtraction";
 import { storagePut } from "../storage";
+import { ENV } from "../_core/env";
 
 // ─── List ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,37 @@ export const bulkDeleteDocumentsProcedure = publicProcedure
     return { success: true, deleted: input.ids.length };
   });
 
+// ─── Sidecar Status ──────────────────────────────────────────────────────────
+
+export const sidecarStatusProcedure = publicProcedure.query(async () => {
+  const url = ENV.embedServiceUrl.trim().replace(/\/+$/, "");
+  if (!url) {
+    return { connected: false, url: null, model: null, totalDocuments: 0, totalVectors: 0, chunkSize: null, chunkOverlap: null };
+  }
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch(`${url}/health`, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!resp.ok) return { connected: false, url, model: null, totalDocuments: 0, totalVectors: 0, chunkSize: null, chunkOverlap: null };
+    const data = (await resp.json()) as {
+      model?: string; indexed?: number; documents?: number;
+      chunk_size?: number; chunk_overlap?: number;
+    };
+    return {
+      connected: true,
+      url,
+      model: data.model ?? null,
+      totalDocuments: data.documents ?? 0,
+      totalVectors: data.indexed ?? 0,
+      chunkSize: data.chunk_size ?? null,
+      chunkOverlap: data.chunk_overlap ?? null,
+    };
+  } catch {
+    return { connected: false, url, model: null, totalDocuments: 0, totalVectors: 0, chunkSize: null, chunkOverlap: null };
+  }
+});
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const documentsRouter = router({
@@ -214,4 +246,5 @@ export const documentsRouter = router({
   bulkDelete: bulkDeleteDocumentsProcedure,
   reindex: reindexDocumentProcedure,
   search: searchDocuments,
+  sidecarStatus: sidecarStatusProcedure,
 });

@@ -76,3 +76,12 @@
 - [x] Update Node.js processDocument to send full extracted text (no 6000-char cap)
 - [x] Update chunking tests in Python and Node.js
 - [x] Checkpoint
+
+## Configurable Remote Sidecar
+- [x] Register EMBED_SERVICE_URL via webdev_request_secrets
+- [x] Add GET /api/sidecar-status endpoint returning { connected, url, model, totalIndexed }
+- [x] Add sidecar status badge to NavBar (green = connected, amber = fallback)
+- [x] Write embed_service/DEPLOY.md: Cloud Computer, VPS, and local setup guide
+- [x] Write systemd service file for the sidecar
+- [x] Update embed_service/README.md with remote deployment notes
+- [x] Checkpoint

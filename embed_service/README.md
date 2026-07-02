@@ -102,6 +102,22 @@ The index is loaded automatically on startup. To reset it, delete both files.
 
 ---
 
+## Remote Deployment
+
+To run the sidecar on a remote host (Cloud Computer, VPS, or any server) so the
+published web app can use real Ollama embeddings, see **[DEPLOY.md](./DEPLOY.md)**
+for step-by-step instructions covering:
+
+- Manus Cloud Computer (managed Ubuntu VM, $10/month Basic tier)
+- Any VPS (DigitalOcean, Hetzner, AWS EC2, etc.)
+- Local machine with the web app running in development mode
+
+Once the sidecar is running on a remote host, set `EMBED_SERVICE_URL` in the
+Manus WebDev Secrets panel (Management UI → Settings → Secrets) to
+`http://<YOUR_HOST_IP>:8765`. The nav bar badge will turn green within 30 seconds.
+
+---
+
 ## Notes on the Model
 
 `mxbai-embed-large` produces **1024-dimensional** embeddings and is one of the strongest open-source embedding models for English text (MTEB benchmark top-10 as of 2024). The FAISS index uses **IndexFlatIP** (exact inner product search) on L2-normalised vectors, which is equivalent to cosine similarity. For very large libraries (>1 million documents) you could switch to `IndexIVFFlat` for approximate search, but exact search is recommended for most use cases.
