@@ -58,3 +58,13 @@
 - [x] Add result count selector to the search UI (options: 5, 10, 20, 50, 100)
 - [x] Persist the user's preference in localStorage
 - [x] Checkpoint
+
+## Python/Ollama/FAISS Embedding Sidecar (Local)
+- [x] Write embed_service/main.py: FastAPI sidecar with /embed and /search endpoints using Ollama mxbai-embed-large + FAISS
+- [x] Write embed_service/requirements.txt
+- [x] Write embed_service/README.md with setup instructions
+- [x] Update server/embedding.ts to call the sidecar with fallback to n-gram
+- [x] Update server/routers/documents.ts search to call sidecar /search when available
+- [x] Add EMBED_SERVICE_URL env var support
+- [x] Write sidecar tests
+- [x] Checkpoint

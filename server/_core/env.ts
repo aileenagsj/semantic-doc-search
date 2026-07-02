@@ -7,4 +7,6 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  /** URL of the Python embedding sidecar (e.g. http://localhost:8765). Empty = use built-in fallback. */
+  embedServiceUrl: process.env.EMBED_SERVICE_URL ?? "",
 };

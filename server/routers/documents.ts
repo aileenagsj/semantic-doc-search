@@ -18,8 +18,12 @@ import {
   deserializeEmbedding,
   generateEmbedding,
   serializeEmbedding,
+  sidecarDeleteDocument,
+  sidecarEmbedDocument,
+  sidecarReindexDocument,
+  sidecarSearch,
 } from "../embedding";
-import { extractText, findRelevantSnippet, makeSnippet } from "../textExtraction";
+import { extractText, findRelevantSnippet } from "../textExtraction";
 import { storagePut } from "../storage";
 
 // ─── List ────────────────────────────────────────────────────────────────────
@@ -46,6 +50,8 @@ export const deleteDocumentProcedure = publicProcedure
   .mutation(async ({ input }) => {
     const doc = await getDocumentById(input.id);
     if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+    // Remove from FAISS index (fire-and-forget — never blocks the response)
+    void sidecarDeleteDocument(input.id);
     await deleteDocument(input.id);
     return { success: true };
   });
@@ -60,15 +66,41 @@ export const searchDocuments = publicProcedure
   .query(async ({ input }) => {
     const { query, topK } = input;
 
-    // Embed the query
+    // ── Path A: Python sidecar (FAISS + Ollama) ───────────────────────────
+    const sidecarResults = await sidecarSearch(query, topK);
+    if (sidecarResults !== null) {
+      if (sidecarResults.length === 0) return [];
+      // Fetch full document metadata for the returned IDs
+      const docs = await getReadyDocuments();
+      const docMap = new Map(docs.map(d => [d.id, d]));
+      return sidecarResults
+        .map(({ doc_id, score }) => {
+          const d = docMap.get(doc_id);
+          if (!d) return null;
+          const snippet = d.extractedText
+            ? findRelevantSnippet(d.extractedText, query, 280)
+            : "";
+          return {
+            id: d.id,
+            originalName: d.originalName,
+            fileUrl: d.fileUrl,
+            mimeType: d.mimeType,
+            score: Math.round(score * 1000) / 1000,
+            snippet,
+            createdAt: d.createdAt,
+          };
+        })
+        .filter(Boolean) as Array<{
+          id: number; originalName: string; fileUrl: string;
+          mimeType: string; score: number; snippet: string; createdAt: Date;
+        }>;
+    }
+
+    // ── Path B: fallback — n-gram cosine similarity in Node.js ────────────
     const queryEmbedding = await generateEmbedding(query);
-
-    // Fetch all ready documents
     const docs = await getReadyDocuments();
-
     if (docs.length === 0) return [];
 
-    // Score each document
     const scored = docs
       .filter(d => d.embeddingJson)
       .map(d => {
@@ -88,25 +120,44 @@ export const searchDocuments = publicProcedure
         };
       });
 
-    // Sort descending by score, return topK results
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topK);
   });
 
-// ─── Process (background-style: extract + embed after upload) ─────────────────
+// ─── Process (background: extract + embed after upload) ──────────────────────
 
-export async function processDocument(id: number, buffer: Buffer, mimeType: string) {
+/**
+ * Shared document processing pipeline.
+ * @param isReindex - when true, calls sidecarReindexDocument (removes old vectors first)
+ *                    when false, calls sidecarEmbedDocument (fresh add)
+ */
+export async function processDocument(
+  id: number,
+  buffer: Buffer,
+  mimeType: string,
+  isReindex = false
+) {
   try {
     const { text } = await extractText(buffer, mimeType);
     if (!text || text.length < 5) {
       await updateDocumentError(id, "Could not extract text from document.");
       return;
     }
-    // Use first 6000 chars for embedding to keep cost low
+
+    // Use first 6000 chars for embedding
     const embeddingText = text.slice(0, 6000);
+
+    // Try the Python sidecar first
+    const sidecarFn = isReindex ? sidecarReindexDocument : sidecarEmbedDocument;
+    const sidecarVec = await sidecarFn(id, embeddingText);
+    if (sidecarVec) {
+      await updateDocumentEmbedding(id, text, serializeEmbedding(sidecarVec));
+      return;
+    }
+
+    // Fallback: n-gram embedding stored in DB
     const embedding = await generateEmbedding(embeddingText);
-    const embeddingJson = serializeEmbedding(embedding);
-    await updateDocumentEmbedding(id, text, embeddingJson);
+    await updateDocumentEmbedding(id, text, serializeEmbedding(embedding));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error during processing";
     await updateDocumentError(id, msg);
@@ -121,26 +172,21 @@ export const reindexDocumentProcedure = publicProcedure
     const doc = await getDocumentById(input.id);
     if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
 
-    // Mark as processing immediately so the UI can start polling
     await resetDocumentToProcessing(input.id);
 
-    // Fetch the original file from S3 via a signed URL
     let fileBuffer: Buffer;
     try {
       const signedUrl = await storageGetSignedUrl(doc.fileKey);
       const resp = await fetch(signedUrl);
       if (!resp.ok) throw new Error(`S3 fetch failed: ${resp.status}`);
-      const arrayBuf = await resp.arrayBuffer();
-      fileBuffer = Buffer.from(arrayBuf);
+      fileBuffer = Buffer.from(await resp.arrayBuffer());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to fetch file from storage";
       await updateDocumentError(input.id, msg);
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: msg });
     }
 
-    // Fire-and-forget re-processing (same pipeline as initial upload)
-    processDocument(input.id, fileBuffer, doc.mimeType).catch(() => {/* already logged in processDocument */});
-
+    processDocument(input.id, fileBuffer, doc.mimeType, true).catch(() => {});
     return { success: true };
   });
 
@@ -156,6 +202,8 @@ export const bulkDeleteDocumentsProcedure = publicProcedure
     })
   )
   .mutation(async ({ input }) => {
+    // Remove from FAISS index (fire-and-forget — never blocks the response)
+    void Promise.allSettled(input.ids.map(id => sidecarDeleteDocument(id)));
     await deleteDocuments(input.ids);
     return { success: true, deleted: input.ids.length };
   });
