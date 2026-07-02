@@ -40,3 +40,9 @@
 - [x] Show ZIP contents as an expandable list of per-file status rows
 - [x] Vitest: ZIP batch route helpers
 - [x] Checkpoint
+
+## Bulk Delete
+- [x] Add bulkDelete tRPC procedure that accepts an array of document IDs
+- [x] Update Manage page: row checkboxes, select-all header checkbox, bulk delete toolbar, confirmation dialog
+- [x] Vitest: bulkDelete procedure
+- [x] Checkpoint

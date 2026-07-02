@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   FileText,
   FileType2,
@@ -24,7 +24,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Doc = {
   id: number;
@@ -37,29 +40,35 @@ type Doc = {
   createdAt: Date;
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function StatusBadge({ status, errorMessage }: { status: Doc["status"]; errorMessage?: string | null }) {
-  if (status === "ready") {
+function StatusBadge({
+  status,
+  errorMessage,
+}: {
+  status: Doc["status"];
+  errorMessage?: string | null;
+}) {
+  if (status === "ready")
     return (
       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
         <CheckCircle2 className="w-3 h-3" />
         Indexed
       </span>
     );
-  }
-  if (status === "processing") {
+  if (status === "processing")
     return (
       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">
         <Loader2 className="w-3 h-3 animate-spin" />
         Processing
       </span>
     );
-  }
   return (
     <span
       className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700 cursor-help"
@@ -72,24 +81,45 @@ function StatusBadge({ status, errorMessage }: { status: Doc["status"]; errorMes
 }
 
 function FileIcon({ mimeType }: { mimeType: string }) {
-  const isPdf = mimeType.includes("pdf");
-  return isPdf ? (
+  return mimeType.includes("pdf") ? (
     <FileType2 className="w-5 h-5 text-destructive/60 flex-shrink-0" />
   ) : (
     <FileText className="w-5 h-5 text-primary/60 flex-shrink-0" />
   );
 }
 
+// ─── Doc row ──────────────────────────────────────────────────────────────────
+
 function DocRow({
   doc,
+  selected,
+  onToggle,
   onDelete,
 }: {
   doc: Doc;
-  onDelete: (id: number, name: string) => void;
+  selected: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
 }) {
   return (
-    <tr className="group border-b border-border/40 hover:bg-secondary/30 transition-colors duration-100">
-      <td className="py-4 px-5">
+    <tr
+      className={cn(
+        "group border-b border-border/40 transition-colors duration-100",
+        selected ? "bg-primary/5" : "hover:bg-secondary/30"
+      )}
+    >
+      {/* Checkbox */}
+      <td className="py-4 pl-5 pr-3 w-10">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onToggle}
+          aria-label={`Select ${doc.originalName}`}
+          className="translate-y-px"
+        />
+      </td>
+
+      {/* Name + size */}
+      <td className="py-4 px-3">
         <div className="flex items-center gap-3 min-w-0">
           <FileIcon mimeType={doc.mimeType} />
           <div className="min-w-0">
@@ -102,10 +132,14 @@ function DocRow({
           </div>
         </div>
       </td>
-      <td className="py-4 px-5 hidden sm:table-cell">
+
+      {/* Status */}
+      <td className="py-4 px-3 hidden sm:table-cell">
         <StatusBadge status={doc.status} errorMessage={doc.errorMessage} />
       </td>
-      <td className="py-4 px-5 hidden md:table-cell">
+
+      {/* Date */}
+      <td className="py-4 px-3 hidden md:table-cell">
         <span className="text-sm text-muted-foreground">
           {new Date(doc.createdAt).toLocaleDateString("en-US", {
             year: "numeric",
@@ -114,7 +148,9 @@ function DocRow({
           })}
         </span>
       </td>
-      <td className="py-4 px-5">
+
+      {/* Actions */}
+      <td className="py-4 pl-3 pr-5">
         <div className="flex items-center justify-end gap-1">
           <a
             href={doc.fileUrl}
@@ -126,7 +162,7 @@ function DocRow({
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
-            onClick={() => onDelete(doc.id, doc.originalName)}
+            onClick={onDelete}
             className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors duration-150"
             title="Delete document"
           >
@@ -138,22 +174,35 @@ function DocRow({
   );
 }
 
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+type DeleteTarget =
+  | { kind: "single"; id: number; name: string }
+  | { kind: "bulk"; ids: number[] };
+
 export default function ManagePage() {
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const utils = trpc.useUtils();
 
   const { data: docs, isLoading, isError } = trpc.documents.list.useQuery(undefined, {
     refetchInterval: (query) => {
-      // Poll every 3s if any doc is still processing
       const data = query.state.data;
-      if (data?.some(d => d.status === "processing")) return 3000;
+      if (data?.some((d) => d.status === "processing")) return 3000;
       return false;
     },
   });
 
+  // ── Single delete ──────────────────────────────────────────────────────────
+
   const deleteMutation = trpc.documents.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       utils.documents.list.invalidate();
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(vars.id);
+        return next;
+      });
       toast.success("Document deleted");
       setDeleteTarget(null);
     },
@@ -163,26 +212,90 @@ export default function ManagePage() {
     },
   });
 
-  const handleDelete = (id: number, name: string) => {
-    setDeleteTarget({ id, name });
+  // ── Bulk delete ────────────────────────────────────────────────────────────
+
+  const bulkDeleteMutation = trpc.documents.bulkDelete.useMutation({
+    onSuccess: (data) => {
+      utils.documents.list.invalidate();
+      setSelected(new Set());
+      toast.success(`${data.deleted} document${data.deleted !== 1 ? "s" : ""} deleted`);
+      setDeleteTarget(null);
+    },
+    onError: (err) => {
+      toast.error(err.message ?? "Bulk delete failed");
+      setDeleteTarget(null);
+    },
+  });
+
+  // ── Selection helpers ──────────────────────────────────────────────────────
+
+  const allIds = useMemo(() => docs?.map((d) => d.id) ?? [], [docs]);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+  const someSelected = allIds.some((id) => selected.has(id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allIds));
+    }
   };
+
+  const toggleOne = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // ── Confirm delete ─────────────────────────────────────────────────────────
 
   const confirmDelete = () => {
-    if (deleteTarget) deleteMutation.mutate({ id: deleteTarget.id });
+    if (!deleteTarget) return;
+    if (deleteTarget.kind === "single") {
+      deleteMutation.mutate({ id: deleteTarget.id });
+    } else {
+      bulkDeleteMutation.mutate({ ids: deleteTarget.ids });
+    }
   };
 
-  const readyCount = docs?.filter(d => d.status === "ready").length ?? 0;
-  const processingCount = docs?.filter(d => d.status === "processing").length ?? 0;
-  const errorCount = docs?.filter(d => d.status === "error").length ?? 0;
+  const isPending = deleteMutation.isPending || bulkDeleteMutation.isPending;
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+
+  const readyCount = docs?.filter((d) => d.status === "ready").length ?? 0;
+  const processingCount = docs?.filter((d) => d.status === "processing").length ?? 0;
+  const errorCount = docs?.filter((d) => d.status === "error").length ?? 0;
+
+  const selectedCount = selected.size;
+
+  // ── Dialog copy ────────────────────────────────────────────────────────────
+
+  const dialogTitle =
+    deleteTarget?.kind === "bulk"
+      ? `Delete ${deleteTarget.ids.length} document${deleteTarget.ids.length !== 1 ? "s" : ""}?`
+      : "Delete document?";
+
+  const dialogDescription =
+    deleteTarget?.kind === "bulk" ? (
+      <>
+        <strong className="text-foreground">{deleteTarget.ids.length} selected document{deleteTarget.ids.length !== 1 ? "s" : ""}</strong>{" "}
+        will be permanently removed from your search index. This action cannot be undone.
+      </>
+    ) : (
+      <>
+        <strong className="text-foreground">{deleteTarget?.kind === "single" ? deleteTarget.name : ""}</strong>{" "}
+        will be permanently removed from your search index. This action cannot be undone.
+      </>
+    );
 
   return (
     <div className="container py-16 max-w-4xl">
       {/* Header */}
       <div className="animate-fade-up flex items-start justify-between gap-4 mb-10">
         <div>
-          <h1 className="font-serif text-4xl font-bold text-foreground mb-3">
-            Documents
-          </h1>
+          <h1 className="font-serif text-4xl font-bold text-foreground mb-3">Documents</h1>
           <p className="text-muted-foreground leading-relaxed">
             Manage your indexed document library.
           </p>
@@ -212,10 +325,36 @@ export default function ManagePage() {
         </div>
       )}
 
+      {/* Bulk action toolbar */}
+      {selectedCount > 0 && (
+        <div className="animate-fade-up mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-foreground">
+            {selectedCount} document{selectedCount !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 px-3 py-1.5 rounded-lg hover:bg-secondary"
+            >
+              Deselect all
+            </button>
+            <button
+              onClick={() =>
+                setDeleteTarget({ kind: "bulk", ids: Array.from(selected) })
+              }
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors duration-150"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete {selectedCount}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Loading */}
       {isLoading && (
         <div className="space-y-3">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-16 rounded-xl animate-shimmer" />
           ))}
         </div>
@@ -259,23 +398,49 @@ export default function ManagePage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/60 bg-secondary/40">
-                <th className="py-3.5 px-5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {/* Select-all checkbox */}
+                <th className="py-3.5 pl-5 pr-3 w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    // indeterminate state when some (but not all) are selected
+                    ref={(el) => {
+                      if (el) {
+                        const input = el.querySelector?.("input") ?? (el as unknown as HTMLInputElement);
+                        if (input && "indeterminate" in input) {
+                          (input as HTMLInputElement).indeterminate = someSelected && !allSelected;
+                        }
+                      }
+                    }}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all documents"
+                    className="translate-y-px"
+                  />
+                </th>
+                <th className="py-3.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Document
                 </th>
-                <th className="py-3.5 px-5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">
+                <th className="py-3.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">
                   Status
                 </th>
-                <th className="py-3.5 px-5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">
+                <th className="py-3.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">
                   Uploaded
                 </th>
-                <th className="py-3.5 px-5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="py-3.5 pl-3 pr-5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody>
-              {docs.map(doc => (
-                <DocRow key={doc.id} doc={doc} onDelete={handleDelete} />
+              {docs.map((doc) => (
+                <DocRow
+                  key={doc.id}
+                  doc={doc}
+                  selected={selected.has(doc.id)}
+                  onToggle={() => toggleOne(doc.id)}
+                  onDelete={() =>
+                    setDeleteTarget({ kind: "single", id: doc.id, name: doc.originalName })
+                  }
+                />
               ))}
             </tbody>
           </table>
@@ -283,25 +448,25 @@ export default function ManagePage() {
       )}
 
       {/* Delete confirmation dialog */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-serif text-xl">Delete document?</AlertDialogTitle>
+            <AlertDialogTitle className="font-serif text-xl">{dialogTitle}</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground leading-relaxed">
-              <strong className="text-foreground">{deleteTarget?.name}</strong> will be permanently
-              removed from your search index. This action cannot be undone.
+              {dialogDescription}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={isPending}
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

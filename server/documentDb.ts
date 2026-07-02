@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { getDb } from "./db";
 import { documents, InsertDocument, Document } from "../drizzle/schema";
 
@@ -58,4 +58,11 @@ export async function deleteDocument(id: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(documents).where(eq(documents.id, id));
+}
+
+export async function deleteDocuments(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(documents).where(inArray(documents.id, ids));
 }

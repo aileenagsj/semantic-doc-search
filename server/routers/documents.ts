@@ -3,6 +3,7 @@ import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import {
   deleteDocument,
+  deleteDocuments,
   getDocumentById,
   getDocuments,
   getReadyDocuments,
@@ -107,10 +108,27 @@ export async function processDocument(id: number, buffer: Buffer, mimeType: stri
   }
 }
 
+// ─── Bulk Delete ─────────────────────────────────────────────────────────────
+
+export const bulkDeleteDocumentsProcedure = publicProcedure
+  .input(
+    z.object({
+      ids: z
+        .array(z.number().int().positive())
+        .min(1, "At least one document ID is required")
+        .max(500, "Cannot delete more than 500 documents at once"),
+    })
+  )
+  .mutation(async ({ input }) => {
+    await deleteDocuments(input.ids);
+    return { success: true, deleted: input.ids.length };
+  });
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const documentsRouter = router({
   list: listDocuments,
   delete: deleteDocumentProcedure,
+  bulkDelete: bulkDeleteDocumentsProcedure,
   search: searchDocuments,
 });
