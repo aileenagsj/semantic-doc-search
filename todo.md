@@ -68,3 +68,11 @@
 - [x] Add EMBED_SERVICE_URL env var support
 - [x] Write sidecar tests
 - [x] Checkpoint
+
+## Document Chunking (500-char blocks)
+- [x] Add chunk_text() utility to sidecar: 500-char blocks with 100-char overlap
+- [x] Update sidecar /embed to embed all chunks and add each as a separate FAISS vector
+- [x] Update sidecar /reindex to remove old vectors then re-embed all chunks
+- [x] Update Node.js processDocument to send full extracted text (no 6000-char cap)
+- [x] Update chunking tests in Python and Node.js
+- [x] Checkpoint

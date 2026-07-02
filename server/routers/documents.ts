@@ -144,19 +144,17 @@ export async function processDocument(
       return;
     }
 
-    // Use first 6000 chars for embedding
-    const embeddingText = text.slice(0, 6000);
-
-    // Try the Python sidecar first
+    // Send full text to the sidecar — it handles chunking internally (500-char blocks).
+    // For the n-gram fallback, cap at 6000 chars to keep it fast.
     const sidecarFn = isReindex ? sidecarReindexDocument : sidecarEmbedDocument;
-    const sidecarVec = await sidecarFn(id, embeddingText);
+    const sidecarVec = await sidecarFn(id, text);
     if (sidecarVec) {
       await updateDocumentEmbedding(id, text, serializeEmbedding(sidecarVec));
       return;
     }
 
-    // Fallback: n-gram embedding stored in DB
-    const embedding = await generateEmbedding(embeddingText);
+    // Fallback: n-gram embedding stored in DB (cap at 6000 chars)
+    const embedding = await generateEmbedding(text.slice(0, 6000));
     await updateDocumentEmbedding(id, text, serializeEmbedding(embedding));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error during processing";
