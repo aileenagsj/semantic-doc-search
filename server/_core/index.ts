@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { registerUploadRoute } from "../uploadRoute";
+import { registerBatchUploadRoute } from "../batchUploadRoute";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -38,6 +39,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerUploadRoute(app);
+  registerBatchUploadRoute(app);
   // tRPC API
   app.use(
     "/api/trpc",

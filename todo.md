@@ -30,4 +30,13 @@
 - [x] Vitest: search ranking logic
 
 ## Delivery
-- [ ] Checkpoint and publish
+- [x] Checkpoint and publish
+
+## Batch ZIP Upload
+- [x] Install adm-zip for server-side ZIP extraction
+- [x] Create /api/upload-batch Express route: accept a .zip file, unzip in memory, validate each entry, upload each doc to S3, insert DB records, fire background processing
+- [x] Return a batch result listing each file's id, name, and status
+- [x] Update Upload page: accept .zip in file picker and drop zone
+- [x] Show ZIP contents as an expandable list of per-file status rows
+- [x] Vitest: ZIP batch route helpers
+- [x] Checkpoint
