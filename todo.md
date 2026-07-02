@@ -46,3 +46,9 @@
 - [x] Update Manage page: row checkboxes, select-all header checkbox, bulk delete toolbar, confirmation dialog
 - [x] Vitest: bulkDelete procedure
 - [x] Checkpoint
+
+## Re-index
+- [x] Add reindex tRPC procedure: fetch doc from S3, re-extract text, regenerate embedding, update DB
+- [x] Add RefreshCw button to each row on the Manage page; show spinner while processing; poll until ready
+- [x] Vitest: reindex procedure input validation
+- [x] Checkpoint

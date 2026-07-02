@@ -60,6 +60,15 @@ export async function deleteDocument(id: number): Promise<void> {
   await db.delete(documents).where(eq(documents.id, id));
 }
 
+export async function resetDocumentToProcessing(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(documents)
+    .set({ status: "processing", errorMessage: null, extractedText: null, embeddingJson: null })
+    .where(eq(documents.id, id));
+}
+
 export async function deleteDocuments(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
   const db = await getDb();

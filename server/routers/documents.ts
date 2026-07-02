@@ -8,9 +8,11 @@ import {
   getDocuments,
   getReadyDocuments,
   insertDocument,
+  resetDocumentToProcessing,
   updateDocumentEmbedding,
   updateDocumentError,
 } from "../documentDb";
+import { storageGetSignedUrl } from "../storage";
 import {
   cosineSimilarity,
   deserializeEmbedding,
@@ -108,6 +110,37 @@ export async function processDocument(id: number, buffer: Buffer, mimeType: stri
   }
 }
 
+// ─── Re-index ────────────────────────────────────────────────────────────────
+
+export const reindexDocumentProcedure = publicProcedure
+  .input(z.object({ id: z.number().int().positive() }))
+  .mutation(async ({ input }) => {
+    const doc = await getDocumentById(input.id);
+    if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
+
+    // Mark as processing immediately so the UI can start polling
+    await resetDocumentToProcessing(input.id);
+
+    // Fetch the original file from S3 via a signed URL
+    let fileBuffer: Buffer;
+    try {
+      const signedUrl = await storageGetSignedUrl(doc.fileKey);
+      const resp = await fetch(signedUrl);
+      if (!resp.ok) throw new Error(`S3 fetch failed: ${resp.status}`);
+      const arrayBuf = await resp.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuf);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch file from storage";
+      await updateDocumentError(input.id, msg);
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: msg });
+    }
+
+    // Fire-and-forget re-processing (same pipeline as initial upload)
+    processDocument(input.id, fileBuffer, doc.mimeType).catch(() => {/* already logged in processDocument */});
+
+    return { success: true };
+  });
+
 // ─── Bulk Delete ─────────────────────────────────────────────────────────────
 
 export const bulkDeleteDocumentsProcedure = publicProcedure
@@ -130,5 +163,6 @@ export const documentsRouter = router({
   list: listDocuments,
   delete: deleteDocumentProcedure,
   bulkDelete: bulkDeleteDocumentsProcedure,
+  reindex: reindexDocumentProcedure,
   search: searchDocuments,
 });

@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ChevronRight,
   FolderOpen,
+  RefreshCw,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
@@ -95,11 +96,15 @@ function DocRow({
   selected,
   onToggle,
   onDelete,
+  onReindex,
+  isReindexing,
 }: {
   doc: Doc;
   selected: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onReindex: () => void;
+  isReindexing: boolean;
 }) {
   return (
     <tr
@@ -162,8 +167,17 @@ function DocRow({
             <ExternalLink className="w-4 h-4" />
           </a>
           <button
+            onClick={onReindex}
+            disabled={isReindexing || doc.status === "processing"}
+            className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Re-index document"
+          >
+            <RefreshCw className={cn("w-4 h-4", (isReindexing || doc.status === "processing") && "animate-spin")} />
+          </button>
+          <button
             onClick={onDelete}
-            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors duration-150"
+            disabled={isReindexing || doc.status === "processing"}
+            className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             title="Delete document"
           >
             <Trash2 className="w-4 h-4" />
@@ -183,6 +197,7 @@ type DeleteTarget =
 export default function ManagePage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [reindexingIds, setReindexingIds] = useState<Set<number>>(new Set());
   const utils = trpc.useUtils();
 
   const { data: docs, isLoading, isError } = trpc.documents.list.useQuery(undefined, {
@@ -190,6 +205,33 @@ export default function ManagePage() {
       const data = query.state.data;
       if (data?.some((d) => d.status === "processing")) return 3000;
       return false;
+    },
+  });
+
+  // ── Re-index ───────────────────────────────────────────────────────────────
+
+  const reindexMutation = trpc.documents.reindex.useMutation({
+    onMutate: (vars) => {
+      setReindexingIds((prev) => new Set(prev).add(vars.id));
+    },
+    onSuccess: (_, vars) => {
+      // The doc is now "processing" — the existing polling will pick it up
+      utils.documents.list.invalidate();
+      toast.success("Re-indexing started");
+      // Remove from reindexing set once the list refreshes and shows processing
+      setReindexingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(vars.id);
+        return next;
+      });
+    },
+    onError: (err, vars) => {
+      toast.error(err.message ?? "Re-index failed");
+      setReindexingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(vars.id);
+        return next;
+      });
     },
   });
 
@@ -437,6 +479,8 @@ export default function ManagePage() {
                   doc={doc}
                   selected={selected.has(doc.id)}
                   onToggle={() => toggleOne(doc.id)}
+                  onReindex={() => reindexMutation.mutate({ id: doc.id })}
+                  isReindexing={reindexingIds.has(doc.id)}
                   onDelete={() =>
                     setDeleteTarget({ kind: "single", id: doc.id, name: doc.originalName })
                   }
