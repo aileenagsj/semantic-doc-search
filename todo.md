@@ -95,3 +95,9 @@
 - [x] Add "Unlock" button in nav or page header to re-prompt for PIN
 - [x] Write tests for PIN validation
 - [x] Checkpoint
+
+## Cloud Computer Deployment
+- [x] Set EMBED_SERVICE_URL to http://34.138.97.42:8765
+- [x] Write step-by-step deployment guide for Cloud Computer
+- [x] Test sidecar connection from Node.js backend
+- [x] Checkpoint
