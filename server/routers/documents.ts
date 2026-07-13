@@ -31,6 +31,7 @@ import { ENV } from "../_core/env";
 
 export const listDocuments = publicProcedure.query(async () => {
   const docs = await getDocuments();
+  // Exclude large text fields (extractedText, embeddingJson) to avoid Superjson serialization depth limits
   return docs.map(d => ({
     id: d.id,
     originalName: d.originalName,
