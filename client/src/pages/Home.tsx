@@ -13,7 +13,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOP_K_OPTIONS = [5, 10, 20, 50, 100] as const;
+const TOP_K_OPTIONS = [3, 5, 10, 20] as const;
 type TopKOption = (typeof TOP_K_OPTIONS)[number];
 const DEFAULT_TOP_K: TopKOption = 10;
 const LS_KEY = "semanticSearch_topK";
