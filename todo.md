@@ -101,3 +101,9 @@
 - [x] Write step-by-step deployment guide for Cloud Computer
 - [x] Test sidecar connection from Node.js backend
 - [x] Checkpoint
+
+## Search Result Highlighting
+- [x] Add highlightTerms utility to highlight query terms in snippets
+- [x] Update Home.tsx ResultCard to render highlighted snippets with styled marks
+- [x] Test highlighting with various query terms and edge cases
+- [x] Checkpoint

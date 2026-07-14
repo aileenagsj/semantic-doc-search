@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Search, Sparkles, FileText, FileType2, ExternalLink, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { highlightTerms } from "@/lib/highlightTerms";
 import { Link } from "wouter";
 import {
   Select,
@@ -62,7 +63,7 @@ function FileIcon({ mimeType }: { mimeType: string }) {
   );
 }
 
-function ResultCard({ result, index }: { result: SearchResult; index: number }) {
+function ResultCard({ result, index, query }: { result: SearchResult; index: number; query: string }) {
   return (
     <article
       className={cn(
@@ -99,7 +100,14 @@ function ResultCard({ result, index }: { result: SearchResult; index: number }) 
         {/* Snippet */}
         {result.snippet && (
           <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-            {result.snippet}
+            {highlightTerms(result.snippet, query).map((segment, i) => (
+              <span
+                key={i}
+                className={segment.isMatch ? "bg-accent/30 text-accent-foreground font-semibold" : ""}
+              >
+                {segment.text}
+              </span>
+            ))}
           </p>
         )}
 
@@ -353,7 +361,7 @@ export default function Home() {
         {!showSkeleton && showResults && results && results.length > 0 && (
           <div className="space-y-4">
             {results.map((r, i) => (
-              <ResultCard key={r.id} result={r} index={i} />
+              <ResultCard key={r.id} result={r} index={i} query={submittedQuery} />
             ))}
           </div>
         )}
